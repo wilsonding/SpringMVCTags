@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flow xmlns="http://www.springframework.org/schema/webflow"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.springframework.org/schema/webflow http://www.springframework.org/schema/webflow/spring-webflow.xsd">
+
+    <secured attributes="principal.canShop" />
+	<on-start>
+		<evaluate expression="shopController.loadOrder(externalContext)" result="conversationScope.order" />
+	</on-start>
+
+    <decision-state id="billingCheck">
+        <if test="shopController.isEligibleToShop(order) == true" then="shippingCheck" else="billingRedirect"/>
+    </decision-state>
+
+	<view-state id="review" view="orderSummary" model="order">
+		<transition on="updateCart">
+			<evaluate expression="shopController.updateShopCart(order)"/>
+			<render fragments="shopCart" />
+		</transition>
+
+		<transition on="back" to="back"/>
+		<transition on="next" to="shippingCheck"/>
+
+		<transition on="review"/>
+		<transition on="catalog" to="catalog" />
+	</view-state>
+	
+	<decision-state id="shippingCheck">
+		<if test="shopController.isShippingNeeded(order) == true" then="shipping" else="reviewOrder"/>
+	</decision-state>	
+
+	<view-state id="shipping" model="order">
+		<on-render>
+			<evaluate expression="shopController.getProductCatalog(order.accountId)" result="requestScope.catalog"/>
+			<evaluate expression="shopController.initShippingLocations(order, catalog)" result="conversationScope.order"/>
+			<evaluate expression="shopController.getCountries()" result="requestScope.countries"/>
+		</on-render>
+
+		<transition on="addLocation">
+			<evaluate expression="shopController.addLocation(order)" result="conversationScope.order"/>
+		</transition>
+
+		<transition on="removeLocation">
+			<evaluate expression="shopController.removeLocation(order)" result="conversationScope.order"/>
+		</transition>
+
+		<transition on="back" to="back" />
+		<transition on="next" to="reviewOrder"/>
+
+		<transition on="shipping" />
+		<transition on="review" to="review" />
+		<transition on="catalog" to="catalog" />
+	</view-state>
+
+	<view-state id="reviewOrder" model="order">
+		<on-render>
+			<evaluate expression="shopController.updateReviewInfo(order)" result="conversationScope.order"/>
+			<evaluate expression="order.getPreviewInvoice()" result="viewScope.invoice"/>
+		</on-render>
+
+        <transition on="back" to="shippingCheckBack">
+            <evaluate expression="order.resetPreviewOrder()"/>
+        </transition>
+
+		<transition on="submitOrder" to="submitOrder"/>
+		<transition on="shipping" to="shipping" />
+		<transition on="review" to="review" />
+		<transition on="catalog" to="catalog" />
+	</view-state>
+
+    <decision-state id="submitOrder">
+        <if test="shopController.submitOrder(order) == true" then="orderFinished" else="reviewOrder"/>
+    </decision-state>
+
+	<decision-state id="shippingCheckBack">
+		<if test="shopController.isShippingNeeded(order) == true" then="shipping" else="back"/>
+	</decision-state>
+
+	<end-state id="back" />
+	<end-state id="catalog" />
+
+    <end-state id="billingRedirect" view="billingRedirect"/>
+    <end-state id="orderFinished" view="orderConfirmation"/>
+</flow>
